@@ -47,6 +47,8 @@ class Experiment(object):
         # Load Experiment Data if available
         self.__load_experiment()
 
+        self.device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+
     # Loads the experiment data if exists to resume training from last saved checkpoint.
     def __load_experiment(self):
         os.makedirs(ROOT_STATS_DIR, exist_ok=True)
@@ -75,7 +77,11 @@ class Experiment(object):
             start_time = datetime.now()
             self.__current_epoch = epoch
             train_loss = self.__train()
-            val_loss = self.__val()
+
+            # TODO
+            # val_loss = self.__val() ------------ commented for until this is implemented
+            val_loss = 0# temporary
+
             self.__record_stats(train_loss, val_loss)
             self.__log_epoch_stats(start_time)
             self.__save_model()
@@ -87,7 +93,34 @@ class Experiment(object):
 
         # Iterate over the data, implement the training function
         for i, (images, captions, _) in enumerate(self.__train_loader):
-            raise NotImplementedError()
+            iter_loss = 0
+            images = images.to(self.device)
+            captions = captions.to(self.device)
+
+            self.__optimizer.zero_grad()
+            out = self.__model(images, captions)
+
+            # We can go ahead with the following structure:
+            # Model should have 2 forward functions: one for training which simply outputs a tensor
+            # and one for testing which outputs a list of strings.
+
+            # TODO: Depending on loss criterion chosen, another architecture choice we need to be sure of is:
+            # Will the model output a tensor of shape:  BATCH, SEQ_LEN, VOCAB -- reconfirm this
+
+            # TODO: Might need to re-check this
+            loss = self.__criterion(out, captions)
+
+            loss.backward()
+            self.__optimizer.step()
+
+            iter_loss = loss.item()
+            training_loss += loss.item()
+
+            if i % 10 == 0:
+                summary_str = f"Training => Epoch: {self.__current_epoch + 1}, iter: {i + i}, Loss: {iter_loss}"
+            iter_loss = 0
+
+        training_loss = training_loss / len(self.__train_loader)
 
         return training_loss
 
