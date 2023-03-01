@@ -1,5 +1,5 @@
 {
-  "experiment_name": "default_experiment",
+  "experiment_name": "LSTM",
   "dataset": {
     "training_ids_file_path": "./train_ids.csv",
     "validation_ids_file_path": "./val_ids.csv",
@@ -9,7 +9,7 @@
     "images_root_dir": "./data/images/",
     "vocabulary_threshold": 2,
     "img_size": 256,
-    "batch_size": 64,
+    "batch_size":64,
     "num_workers": 4
   },
   "experiment": {
@@ -22,7 +22,8 @@
   "model": {
     "hidden_size": 512,
     "embedding_size": 300,
-    "model_type": "RNN",
+    "no_layers": 2, 
+    "model_type": "LSTM",
     "keep_image": false
   },
   "generation": {

@@ -2,12 +2,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from datetime import datetime
-
+import torch.nn as nn
 from caption_utils import *
 from constants import ROOT_STATS_DIR
 from dataset_factory import get_datasets
 from file_utils import *
-from model_factory import get_model
+from model_factory import get_model 
 
 
 # Class to encapsulate a neural experiment.
@@ -17,6 +17,9 @@ from model_factory import get_model
 class Experiment(object):
     def __init__(self, name):
         config_data = read_file_in_dir('./', name + '.json')
+        print(config_data)
+        print(name)
+        print('./', name + '.json')
         if config_data is None:
             raise Exception("Configuration file doesn't exist: ", name)
 
@@ -26,21 +29,28 @@ class Experiment(object):
         # Load Datasets
         self.__coco_test, self.__vocab, self.__train_loader, self.__val_loader, self.__test_loader = get_datasets(
             config_data)
+       
 
         # Setup Experiment
         self.__generation_config = config_data['generation']
         self.__epochs = config_data['experiment']['num_epochs']
+        self.__max_length = config_data['generation']['max_length']
+        self.__is_det = config_data['generation']['deterministic']
+        self.__temp = config_data['generation']['temperature']
+        self.__bs = config_data['dataset']['batch_size']
+        
         self.__current_epoch = 0
         self.__training_losses = []
         self.__val_losses = []
         self.__best_model = None  # Save your best model in this field and use this in test method.
+        self.__lr = config_data['experiment']['learning_rate']
 
         # Init Model
         self.__model = get_model(config_data, self.__vocab)
 
         # TODO: Set these Criterion and Optimizers Correctly
-        self.__criterion = None
-        self.__optimizer = None
+        self.__criterion = eval(config_data['experiment']['criterion'])
+        self.__optimizer = torch.optim.AdamW(self.__model.parameters(), lr = self.__lr)
 
         self.__init_model()
 
@@ -48,6 +58,9 @@ class Experiment(object):
         self.__load_experiment()
 
         self.device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+#         self.device = torch.device('cpu') # BRUHHHHH
+#         self.run() ## WE REMOVED IT TO MAIN TO INCLUDE TEST AS WELL
+        
 
     # Loads the experiment data if exists to resume training from last saved checkpoint.
     def __load_experiment(self):
@@ -64,11 +77,24 @@ class Experiment(object):
 
         else:
             os.makedirs(self.__experiment_dir)
+            
+#             #creating train loss txt
+#             file_name = "training_losses.txt"
+#             file_path = os.path.join(self.__experiment_dir, file_name)
+#             with open(file_path, "w") as f:
+#                 f.write(str([]))
+                
+#             #creating val loss txt
+#             file_name = "val_losses.txt"
+#             file_path = os.path.join(self.__experiment_dir, file_name)
+#             with open(file_path, "w") as f:
+#                 f.write(str([]))
 
     def __init_model(self):
         if torch.cuda.is_available():
             self.__model = self.__model.cuda().float()
             self.__criterion = self.__criterion.cuda()
+        
 
     # Main method to run your experiment. Should be self-explanatory.
     def run(self):
@@ -79,8 +105,7 @@ class Experiment(object):
             train_loss = self.__train()
 
             # TODO
-            # val_loss = self.__val() ------------ commented for until this is implemented
-            val_loss = 0# temporary
+            val_loss = self.__val() 
 
             self.__record_stats(train_loss, val_loss)
             self.__log_epoch_stats(start_time)
@@ -90,37 +115,57 @@ class Experiment(object):
     def __train(self):
         self.__model.train()
         training_loss = 0
-
+        self.__optimizer.zero_grad()
         # Iterate over the data, implement the training function
-        for i, (images, captions, _) in enumerate(self.__train_loader):
+        for i, (images, captions, lengths) in enumerate(self.__train_loader):
+
             iter_loss = 0
             images = images.to(self.device)
             captions = captions.to(self.device)
-
-            self.__optimizer.zero_grad()
-            out = self.__model(images, captions)
+          
+            out = self.__model(images, captions[:,:-1]) ## Removing EOS token
+        
 
             # We can go ahead with the following structure:
             # Model should have 2 forward functions: one for training which simply outputs a tensor
             # and one for testing which outputs a list of strings.
+            
+            ## Gotcha!!
 
             # TODO: Depending on loss criterion chosen, another architecture choice we need to be sure of is:
             # Will the model output a tensor of shape:  BATCH, SEQ_LEN, VOCAB -- reconfirm this
+            
+            ## Yup the shape would be BATCH, SEQ_LEN, VOCAB
 
             # TODO: Might need to re-check this
-            loss = self.__criterion(out, captions)
+            ## Had to reshape it to match torch's requirement
 
-            loss.backward()
+            loss = self.__criterion(out.reshape(-1,out.shape[2]), captions.reshape(-1)) #try view LATER
+            
+            self.__optimizer.zero_grad()
+            loss.backward(loss)
             self.__optimizer.step()
-
+            
             iter_loss = loss.item()
             training_loss += loss.item()
-
+            
+          
             if i % 10 == 0:
-                summary_str = f"Training => Epoch: {self.__current_epoch + 1}, iter: {i + i}, Loss: {iter_loss}"
+                summary_str = f"Training => Epoch: {self.__current_epoch + 1}, iter: {i+1}, Loss: {iter_loss}"
+                print(summary_str)
+            
+            if i % self.__bs == 0 :
+                print("Gen Cap", self.__model.caption_images(images[0].unsqueeze(0), self.__vocab.idx2word, self.__max_length, self.__is_det, self.__temp))
+                
+                      
             iter_loss = 0
-
+            
         training_loss = training_loss / len(self.__train_loader)
+        
+        
+        ## Generating Captions after every epoch
+        
+        
 
         return training_loss
 
@@ -131,7 +176,25 @@ class Experiment(object):
 
         with torch.no_grad():
             for i, (images, captions, _) in enumerate(self.__val_loader):
-                raise NotImplementedError()
+                iter_loss = 0
+                images = images.to(self.device)
+                captions = captions.to(self.device)
+                out = self.__model(images, captions[:,:-1])
+                loss = self.__criterion(out.reshape(-1,out.shape[2]), captions.reshape(-1)) #try view LATER
+
+                iter_loss = loss.item()
+                val_loss += loss.item()
+                
+                if i % 10 == 0:
+                    summary_str = f"val => Epoch: {self.__current_epoch + 1}, iter: {i+1}, Loss: {iter_loss}"
+                    print(summary_str)
+            
+                if i % self.__bs == 0 :
+                    print("Gen Cap val", self.__model.caption_images(images[0].unsqueeze(0), self.__vocab.idx2word, self.__max_length, self.__is_det, self.__temp))
+                    
+                iter_loss = 0
+            
+        val_loss /= len(self.__val_loader)
 
         return val_loss
 
@@ -141,19 +204,47 @@ class Experiment(object):
     def test(self):
         self.__model.eval()
         test_loss = 0
-        bleu1 = 0
-        bleu4 = 0
+        bleu1_score = 0
+        bleu4_score = 0
 
         with torch.no_grad():
-            for iter, (images, captions, img_ids) in enumerate(self.__test_loader):
-                raise NotImplementedError()
+            for i, (images, captions, img_ids) in enumerate(self.__test_loader):
+                iter_loss = 0
+                images = images.to(self.device)
+                captions = captions.to(self.device)
+                out = self.__model(images, captions[:,:-1])
+                loss = self.__criterion(out.reshape(-1,out.shape[2]), captions.reshape(-1)) #try view LATER
+
+                iter_loss = loss.item()
+                test_loss += loss.item()
+                
+                if i % 10 == 0:
+                    summary_str = f"test => Epoch: {self.__current_epoch + 1}, iter: {i + 1}, Loss: {iter_loss}"
+                    print(summary_str)
+                
+                for j, image in enumerate(images):
+                    pred_caption = self.__model.caption_images(image.unsqueeze(0), self.__vocab.idx2word, self.__max_length, self.__is_det, self.__temp)
+#                     print(pred_caption)
+#                     print(captions.shape, captions[j])
+                    targetCaption = [self.__vocab.idx2word[key.item()] for key in captions[j]]
+                    bleu1_score += bleu1(targetCaption, pred_caption)
+                    bleu4_score += bleu4(targetCaption, pred_caption)
+#                     print("isitwotking",captions[j], pred_caption)
+                
+           
+                iter_loss = 0
+            
+            
+        test_loss /= len(self.__test_loader)
+        bleu1_score /= len(self.__test_loader)
+        bleu4_score /= len(self.__test_loader)
 
         result_str = "Test Performance: Loss: {}, Perplexity: {}, Bleu1: {}, Bleu4: {}".format(test_loss,
-                                                                                               bleu1,
-                                                                                               bleu4)
+                                                                                               bleu1_score,
+                                                                                               bleu4_score)
         self.__log(result_str)
 
-        return test_loss, bleu1, bleu4
+        return test_loss, bleu1_score, bleu4_score
 
     def __save_model(self):
         root_model_path = os.path.join(self.__experiment_dir, 'latest_model.pt')
