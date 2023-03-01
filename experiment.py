@@ -1,3 +1,4 @@
+import sys
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -7,7 +8,8 @@ from caption_utils import *
 from constants import ROOT_STATS_DIR
 from dataset_factory import get_datasets
 from file_utils import *
-from model_factory import get_model 
+from model_factory import get_model
+from nltk.tokenize import  word_tokenize
 
 
 # Class to encapsulate a neural experiment.
@@ -206,6 +208,7 @@ class Experiment(object):
         test_loss = 0
         bleu1_score = 0
         bleu4_score = 0
+        cnt = 0
 
         with torch.no_grad():
             for i, (images, captions, img_ids) in enumerate(self.__test_loader):
@@ -221,27 +224,59 @@ class Experiment(object):
                 if i % 10 == 0:
                     summary_str = f"test => Epoch: {self.__current_epoch + 1}, iter: {i + 1}, Loss: {iter_loss}"
                     print(summary_str)
+                    
+#                 print(len(img_ids))
+#                 print(img_ids)
                 
                 for j, image in enumerate(images):
+                    cnt += 1 # increase counter
+                    
                     pred_caption = self.__model.caption_images(image.unsqueeze(0), self.__vocab.idx2word, self.__max_length, self.__is_det, self.__temp)
-#                     print(pred_caption)
-#                     print(captions.shape, captions[j])
-                    targetCaption = [self.__vocab.idx2word[key.item()] for key in captions[j]]
+                    
+                    # Removing start, pad, end tokens and tokenizing & lowering
+                    try:
+                        endIndex = pred_caption.index("<end>")
+                        pred_caption = pred_caption[1:endIndex]
+                    except:
+                        pred_caption = pred_caption[1:]
+                    pred_caption = " ".join(pred_caption)
+                    pred_caption = word_tokenize(pred_caption.lower())
+                    
+                    targetCaption = []
+
+                    for anns in self.__coco_test.imgToAnns[img_ids[j]]: # Get alltrue captions
+#                         print(anns) has 'image_id', 'id', 'caption'
+#                         sys.exit("bruh")
+                        cap = anns['caption']
+                        cap = str(cap).lower()
+                        cap = word_tokenize(cap)
+                        targetCaption.append(cap)
+                    
+                
                     bleu1_score += bleu1(targetCaption, pred_caption)
                     bleu4_score += bleu4(targetCaption, pred_caption)
+                    
+                    
+#                     targetCaption = [self.__vocab.idx2word[key.item()] for key in captions[j]]
+                    
 #                     print("isitwotking",captions[j], pred_caption)
+                    if cnt % 1000 == 0:
+                        print("Predicted: "," ".join(pred_caption),"\n")
+                        print("Targets: ")
+                        for sent in targetCaption:
+                            print(" ".join(sent))
+                        print("\n\n")
+                        
                 
            
                 iter_loss = 0
             
             
         test_loss /= len(self.__test_loader)
-        bleu1_score /= len(self.__test_loader)
-        bleu4_score /= len(self.__test_loader)
-
-        result_str = "Test Performance: Loss: {}, Perplexity: {}, Bleu1: {}, Bleu4: {}".format(test_loss,
-                                                                                               bleu1_score,
-                                                                                               bleu4_score)
+        bleu1_score /= cnt
+        bleu4_score /= cnt
+        result_str = "Test Performance: Loss: {}, Bleu1: {}, Bleu4: {}".format(test_loss,bleu1_score,bleu4_score)
+       
         self.__log(result_str)
 
         return test_loss, bleu1_score, bleu4_score
@@ -288,3 +323,48 @@ class Experiment(object):
         plt.title(self.__name + " Stats Plot")
         plt.savefig(os.path.join(self.__experiment_dir, "stat_plot.png"))
         plt.show()
+
+        
+    def test1image(self):
+        self.__model.eval()
+        rand = np.random.randint(0,self.__bs)
+        
+        x ,y , img_id = next(iter(self.__test_loader))
+        x = x.to(self.device)[rand]
+        y = y.to(self.device)[rand]
+        img_id = img_id[rand]
+        
+        
+
+        pred_caption = self.__model.caption_images(x.unsqueeze(0), self.__vocab.idx2word, self.__max_length, self.__is_det, self.__temp)
+        try:
+            endIndex = pred_caption.index("<end>")
+            pred_caption = pred_caption[1:endIndex]
+        except:
+            pred_caption = pred_caption[1:]
+        pred_caption = " ".join(pred_caption)
+        print("pred caption", pred_caption)
+        
+        pred_caption = word_tokenize(pred_caption.lower())
+        
+
+        
+        targetCaption = []
+        for anns in self.__coco_test.imgToAnns[img_id]: # Get alltrue captions
+            cap = anns['caption']
+            cap = str(cap).lower()
+            cap = word_tokenize(cap)
+            targetCaption.append(cap)
+#         targetCaption = [self.__vocab.idx2word[key.item()] for key in y]
+        print("\nTargets:")
+        for sent in targetCaption:
+            print(" ".join(sent))
+        
+        print(f"Bleu1 {bleu1(targetCaption, pred_caption)}, Bleu4 {bleu4(targetCaption, pred_caption)}")
+        
+        plt.imshow(x.cpu().permute(1,2,0).numpy())
+        plt.savefig("testImages/testImg.png")
+#         plt.show()
+        
+        
+        
