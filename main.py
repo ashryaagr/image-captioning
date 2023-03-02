@@ -23,5 +23,7 @@ if __name__ == "__main__":
     elif mode == "test":
         test_loss, bleu1_score, bleu4_score = exp.test()
         print(f"test loss: {test_loss}, bleu1: {bleu1_score}, bleu4: {bleu4_score}")
+    elif mode == "image_test":
+        exp.test1image()
     else:
         print("invalid mode")
