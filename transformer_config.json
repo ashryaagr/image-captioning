@@ -1,5 +1,5 @@
 {
-  "experiment_name": "Model2",
+  "experiment_name": "Transformer",
   "dataset": {
     "training_ids_file_path": "./train_ids.csv",
     "validation_ids_file_path": "./val_ids.csv",
@@ -23,7 +23,7 @@
     "hidden_size": 512,
     "embedding_size": 300,
     "no_layers": 2, 
-    "model_type": "Model2",
+    "model_type": "Model3",
     "keep_image": false
   },
   "generation": {

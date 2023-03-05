@@ -323,7 +323,7 @@ class Experiment(object):
         plt.legend(loc='best')
         plt.title(self.__name + " Stats Plot")
         plt.savefig(os.path.join(self.__experiment_dir, "stat_plot.png"))
-        plt.show()
+        #plt.show()
 
         
     def test1image(self):

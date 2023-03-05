@@ -1,6 +1,6 @@
 from LSTM_model import ResNetLSTM
 from Architecture2 import Architecture2
-# from Architecture3 import Architecture3
+from TransformerArchitecture import Architecture3
 
 # Build and return the model here based on the configuration.
 def get_model(config_data, vocab):
@@ -18,8 +18,8 @@ def get_model(config_data, vocab):
     elif model_type == "Model2":
         model = Architecture2(hidden_size, embedding_size, no_layers, vocab_size, 50)
 
-    # elif model_type == "Model3":
-    #     model = Architecture3(hidden_size, embedding_size, no_layers, vocab_size, 50)
+    elif model_type == "Model3":
+        model = Architecture3(hidden_size, embedding_size, no_layers, vocab_size, 50)
 
     else:
         raise NotImplementedError("Model Not Implemented")
