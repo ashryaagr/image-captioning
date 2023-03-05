@@ -141,6 +141,7 @@ class Experiment(object):
 
             # TODO: Might need to re-check this
             ## Had to reshape it to match torch's requirement
+            #print(f"pre loss=> Out shape: {out.reshape(-1,out.shape[2]).shape}, captions shape: {captions.reshape(-1).shape}")
 
             loss = self.__criterion(out.reshape(-1,out.shape[2]), captions.reshape(-1)) #try view LATER
             
