@@ -3,7 +3,7 @@ import torch.nn as nn
 from torchvision import models
 
 
-DEBUG = True
+DEBUG = False
 def printf(*args):
     if DEBUG:
         print(" ".join(map(str, args)))
