@@ -6,6 +6,7 @@ from TransformerArchitecture import Architecture3
 def get_model(config_data, vocab):
     hidden_size = config_data['model']['hidden_size']
     embedding_size = config_data['model']['embedding_size']
+    image_embedding_size = config_data['model']['image_embedding_size']
     model_type = config_data['model']['model_type']
     no_layers = config_data['model']['no_layers']
     vocab_size = len(vocab)
@@ -16,7 +17,7 @@ def get_model(config_data, vocab):
         model = ResNetLSTM(hidden_size, embedding_size, no_layers, vocab_size, 50)
     
     elif model_type == "Model2":
-        model = Architecture2(hidden_size, embedding_size, no_layers, vocab_size, 50)
+        model = Architecture2(hidden_size,  image_embedding_size, embedding_size, no_layers, vocab_size, 50)
 
     elif model_type == "Model3":
         model = Architecture3(hidden_size, embedding_size, no_layers, vocab_size, 50)

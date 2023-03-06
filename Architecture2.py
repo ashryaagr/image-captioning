@@ -35,11 +35,11 @@ class Encoder(nn.Module):
                 p.requires_grad = fine_tune
 
 class Decoder(nn.Module):
-    def __init__(self, embed_dim, hidden_dim, vocab_size, num_layers=1):
+    def __init__(self, image_embedding_size, embed_dim, hidden_dim, vocab_size, num_layers=1):
         super(Decoder, self).__init__()
         self.embed_dim, self.hidden_dim, self.vocab_size, self.num_layers = embed_dim, hidden_dim, vocab_size, num_layers
         self.embed = nn.Embedding(self.vocab_size, embed_dim)
-        self.lstm = nn.LSTM(input_size = 2* embed_dim, hidden_size = hidden_dim, num_layers = num_layers, batch_first=True)
+        self.lstm = nn.LSTM(input_size = image_embedding_size+embed_dim, hidden_size = hidden_dim, num_layers = num_layers, batch_first=True)
         self.linearDec = nn.Linear(self.hidden_dim, self.vocab_size)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
@@ -52,19 +52,20 @@ class Decoder(nn.Module):
         return outputs
 
 class Architecture2(nn.Module):
-    def __init__(self,  hidden_size,embedding_size , no_layers, vocab_size, max_lengths = 50, applySoftmax=False):
+    def __init__(self,  hidden_size, image_embedding_size, embedding_size , no_layers, vocab_size, max_lengths = 50, applySoftmax=False):
         super(Architecture2, self).__init__()
         
         self.embedding_size = embedding_size
-        self.embedding_size = hidden_size
+        self.image_embedding_size = image_embedding_size
+        self.hidden_size = hidden_size
         self.vocab_size = vocab_size
         self.no_layers = no_layers
 
         # Turn this flag on if we use NLL Loss. Keep false for cross entropy
         self.applySoftmax = applySoftmax
         
-        self.encoder = Encoder(self.embedding_size)
-        self.decoder = Decoder(self.embedding_size, self.embedding_size, self.vocab_size, self.no_layers)
+        self.encoder = Encoder(self.image_embedding_size)
+        self.decoder = Decoder(self.image_embedding_size, self.embedding_size, self.hidden_size, self.vocab_size, self.no_layers)
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 

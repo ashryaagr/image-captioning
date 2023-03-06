@@ -22,6 +22,7 @@
   "model": {
     "hidden_size": 512,
     "embedding_size": 300,
+    "image_embedding_size":200,
     "no_layers": 2, 
     "model_type": "Model2",
     "keep_image": false
