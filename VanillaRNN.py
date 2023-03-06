@@ -43,7 +43,7 @@ class ResNetRNN(nn.Module):
         self.embed = nn.Embedding(self.vocab_size, self.embedding_size)
         # self.lstm = nn.LSTM(input_size = self.embedding_size, hidden_size = self.hidden_size, num_layers = self.no_layers, batch_first=True) ##LSTM BLOCK
 
-        self.rnn = nn.RNN(input_size=self.embedding_size, hidden_size=self.hidden_size, num_layers=self.no_layers, batch_first=True) ##RNN BLOCK
+        self.rnn = nn.RNN(input_size=self.embedding_size, hidden_size=self.hidden_size, num_layers=self.no_layers, batch_first=True, nonlinearity="relu") ##RNN BLOCK
 
         self.linearDec = nn.Linear(self.hidden_size, self.vocab_size)
     
