@@ -376,11 +376,11 @@ class Experiment(object):
 
         return pred_caption
         
-    def generateReportCaptions_helper(self, good=True, cnt=1):
+    def generateReportCaptions_helper(self, good=True, cnt=6):
         self.__model.eval()
         prefix = "good" if good else "bad"
 
-        for i in range(1):
+        for i in range(100):
             if cnt==0:
                 return
 
@@ -392,9 +392,9 @@ class Experiment(object):
             img_id = img_id[rand]
 
             def log_for_img_id(log_str, newLine=False):
-                log_to_file_in_dir(self.__experiment_dir, f"{prefix}_{img_id}.txt", log_str)
+                log_to_file_in_dir(self.__experiment_dir+"/captions", f"{prefix}_{img_id}.txt", log_str)
                 if newLine:
-                    log_to_file_in_dir(self.__experiment_dir, f"{prefix}_{img_id}.txt", "")
+                    log_to_file_in_dir(self.__experiment_dir+"/captions", f"{prefix}_{img_id}.txt", "")
 
 
             targetCaption = []
@@ -443,7 +443,7 @@ class Experiment(object):
             plt.imshow(x.cpu().permute(1,2,0).numpy())
             plt.savefig(os.path.join(self.__experiment_dir, "captions", f"{prefix}_{img_id}.png"))
 
-        log_to_file_in_dir(self.__experiment_dir, f"report_caption.txt", f"Couldn't search for {cnt} {prefix} example.")
+        log_to_file_in_dir(self.__experiment_dir+"/captions", f"report_caption.txt", f"Couldn't search for {cnt} {prefix} example.")
 
     def generateReportCaptions(self):
         os.makedirs(self.__experiment_dir+"/captions", exist_ok=True)
