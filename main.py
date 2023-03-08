@@ -25,5 +25,7 @@ if __name__ == "__main__":
         print(f"test loss: {test_loss}, bleu1: {bleu1_score}, bleu4: {bleu4_score}")
     elif mode == "image_test":
         exp.test1image()
+    elif mode == "report_caption":
+        exp.generateReportCaptions()
     else:
         print("invalid mode")
