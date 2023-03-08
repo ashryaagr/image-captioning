@@ -336,8 +336,7 @@ class Experiment(object):
         img_id = img_id[rand]
         
         
-
-        pred_caption = self.__model.caption_images(x.unsqueeze(0), self.__vocab.idx2word, self.__max_length, self.__is_det, self.__temp)
+        pred_caption = self.__model.caption_images(x.unsqueeze(0), self.__vocab.idx2word, max_length=self.__max_length, is_deterministic=True, temp=self.__temp)
         try:
             endIndex = pred_caption.index("<end>")
             pred_caption = pred_caption[1:endIndex]
@@ -366,6 +365,87 @@ class Experiment(object):
         plt.imshow(x.cpu().permute(1,2,0).numpy())
         plt.savefig("testImages/testImg.png")
 #         plt.show()
+
+    def extractCaption_helper(self, pred_caption):
+        try:
+            endIndex = pred_caption.index("<end>")
+            pred_caption = pred_caption[1:endIndex]
+        except:
+            pred_caption = pred_caption[1:]
+        pred_caption = " ".join(pred_caption)
+
+        return pred_caption
         
-        
-        
+    def generateReportCaptions_helper(self, good=True, cnt=1):
+        self.__model.eval()
+        prefix = "good" if good else "bad"
+
+        for i in range(1):
+            if cnt==0:
+                return
+
+            rand = np.random.randint(0,self.__bs)
+            
+            x ,y , img_id = next(iter(self.__test_loader))
+            x = x.to(self.device)[rand]
+            y = y.to(self.device)[rand]
+            img_id = img_id[rand]
+
+            def log_for_img_id(log_str, newLine=False):
+                log_to_file_in_dir(self.__experiment_dir, f"{prefix}_{img_id}.txt", log_str)
+                if newLine:
+                    log_to_file_in_dir(self.__experiment_dir, f"{prefix}_{img_id}.txt", "")
+
+
+            targetCaption = []
+            for anns in self.__coco_test.imgToAnns[img_id]: # Get alltrue captions
+                cap = anns['caption']
+                cap = str(cap).lower()
+                cap = word_tokenize(cap)
+                targetCaption.append(cap)
+            
+            
+            pred_caption = self.__model.caption_images(x.unsqueeze(0), self.__vocab.idx2word, max_length=self.__max_length, is_deterministic=False, temp=0.4)
+            pred_caption = self.extractCaption_helper(pred_caption)
+            b1 = bleu1(targetCaption, word_tokenize(pred_caption.lower()))
+
+
+            if good and b1>80:
+                cnt -= 1
+                pass
+            elif not good and b1<40:
+                cnt -= 1
+                pass
+            else:
+                continue
+            
+            log_for_img_id("Model Name: "+self.__name, newLine=True)
+            log_for_img_id("Targets:")
+            for cap in targetCaption:
+                log_for_img_id(" ".join(cap))
+            log_for_img_id("")
+
+            log_for_img_id("Temp 0.4 => "+pred_caption, newLine=True)
+
+            pred_caption = self.__model.caption_images(x.unsqueeze(0), self.__vocab.idx2word, max_length=self.__max_length, is_deterministic=True, temp=0.4)
+            pred_caption = self.extractCaption_helper(pred_caption)
+            log_for_img_id("Deterministic Temp 0.4 => "+pred_caption, newLine=True)
+
+            pred_caption = self.__model.caption_images(x.unsqueeze(0), self.__vocab.idx2word, max_length=self.__max_length, is_deterministic=False, temp=5)
+            pred_caption = self.extractCaption_helper(pred_caption)
+            log_for_img_id("Temp 5 => "+pred_caption, newLine=True)
+
+            pred_caption = self.__model.caption_images(x.unsqueeze(0), self.__vocab.idx2word, max_length=self.__max_length, is_deterministic=False, temp=0.001)
+            pred_caption = self.extractCaption_helper(pred_caption)
+            log_for_img_id("Temp 0.001 => "+pred_caption)
+            
+
+            plt.imshow(x.cpu().permute(1,2,0).numpy())
+            plt.savefig(os.path.join(self.__experiment_dir, "captions", f"{prefix}_{img_id}.png"))
+
+        log_to_file_in_dir(self.__experiment_dir, f"report_caption.txt", f"Couldn't search for {cnt} {prefix} example.")
+
+    def generateReportCaptions(self):
+        os.makedirs(self.__experiment_dir+"/captions", exist_ok=True)
+        self.generateReportCaptions_helper(good=True, cnt=6)
+        self.generateReportCaptions_helper(good=False, cnt=6)
