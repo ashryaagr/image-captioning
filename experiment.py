@@ -26,6 +26,7 @@ class Experiment(object):
             raise Exception("Configuration file doesn't exist: ", name)
 
         self.__name = config_data['experiment_name']
+        self.__configFileName = name
         self.__experiment_dir = os.path.join(ROOT_STATS_DIR, self.__name)
 
         # Load Datasets
@@ -116,6 +117,11 @@ class Experiment(object):
     # TODO: Perform one training iteration on the whole dataset and return loss value
     def __train(self):
         self.__model.train()
+
+        # Copy the config file used to train
+        import shutil
+        shutil.copy(f"./{self.__configFileName}.json", self.__experiment_dir+f"/{self.__configFileName}.json")
+
         training_loss = 0
         self.__optimizer.zero_grad()
         # Iterate over the data, implement the training function
@@ -392,9 +398,9 @@ class Experiment(object):
             img_id = img_id[rand]
 
             def log_for_img_id(log_str, newLine=False):
-                log_to_file_in_dir(self.__experiment_dir+"/captions", f"{prefix}_{img_id}.txt", log_str)
+                log_to_file_in_dir(self.__experiment_dir+"/captions", f"{prefix}_{img_id}.txt", log_str+"\\\\")
                 if newLine:
-                    log_to_file_in_dir(self.__experiment_dir+"/captions", f"{prefix}_{img_id}.txt", "")
+                    log_to_file_in_dir(self.__experiment_dir+"/captions", f"{prefix}_{img_id}.txt", "\\\\")
 
 
             targetCaption = []
@@ -425,19 +431,19 @@ class Experiment(object):
                 log_for_img_id(" ".join(cap))
             log_for_img_id("")
 
-            log_for_img_id("Temp 0.4 => "+pred_caption, newLine=True)
+            log_for_img_id("Temp 0.4: "+pred_caption, newLine=True)
 
             pred_caption = self.__model.caption_images(x.unsqueeze(0), self.__vocab.idx2word, max_length=self.__max_length, is_deterministic=True, temp=0.4)
             pred_caption = self.extractCaption_helper(pred_caption)
-            log_for_img_id("Deterministic Temp 0.4 => "+pred_caption, newLine=True)
+            log_for_img_id("Deterministic Temp 0.4: "+pred_caption, newLine=True)
 
             pred_caption = self.__model.caption_images(x.unsqueeze(0), self.__vocab.idx2word, max_length=self.__max_length, is_deterministic=False, temp=5)
             pred_caption = self.extractCaption_helper(pred_caption)
-            log_for_img_id("Temp 5 => "+pred_caption, newLine=True)
+            log_for_img_id("Temp 5: "+pred_caption, newLine=True)
 
             pred_caption = self.__model.caption_images(x.unsqueeze(0), self.__vocab.idx2word, max_length=self.__max_length, is_deterministic=False, temp=0.001)
             pred_caption = self.extractCaption_helper(pred_caption)
-            log_for_img_id("Temp 0.001 => "+pred_caption)
+            log_for_img_id("Temp 0.001: "+pred_caption)
             
 
             plt.imshow(x.cpu().permute(1,2,0).numpy())
