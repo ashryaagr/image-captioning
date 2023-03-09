@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torchvision import models
-
+import math
 
 DEBUG = False
 def printf(*args):
@@ -36,29 +36,14 @@ class Encoder(nn.Module):
                 p.requires_grad = fine_tune
 
 
-# class Attention(nn.Module):
-#     def __init__(self, encoder_dim, decoder_dim, attention_dim):
-#         super(Attention, self).__init__()
-#         self.encoder_att = nn.Linear(encoder_dim, attention_dim)
-#         self.decoder_att = nn.Linear(decoder_dim, attention_dim)
-#         self.full_att = nn.Linear(attention_dim, 1)
-#         self.relu = nn.ReLU()
-#         self.softmax = nn.Softmax(dim=1)
-
-#     def forward(self, encoder_out, decoder_hidden):
-#         att1 = self.encoder_att(encoder_out)
-#         att2 = self.decoder_att(decoder_hidden)
-#         att = self.full_att(self.relu(att1 + att2.unsqueeze(1))).squeeze(2)
-#         alpha = self.softmax(att)
-#         attention_weighted_encoding = (encoder_out * alpha.unsqueeze(2)).sum(dim=1)
-#         return attention_weighted_encoding, alpha
-
 class Decoder(nn.Module):
     def __init__(self, embed_dim, hidden_dim, vocab_size, num_layers=1):
         super(Decoder, self).__init__()
         self.embed_dim, self.hidden_dim, self.vocab_size, self.num_layers = embed_dim, hidden_dim, vocab_size, num_layers
         self.embed = nn.Embedding(self.vocab_size, embed_dim)
         self.lstm = nn.LSTM(input_size = 2* embed_dim, hidden_size = 2*hidden_dim, num_layers = num_layers, batch_first=True)
+        
+        self.pos_encoding = self.get_positional_encoding(100, 2*embed_dim)
         
         # Transformer layers
         self.transformer_decoder_layer = nn.TransformerDecoderLayer(d_model=self.hidden_dim*2,
@@ -81,9 +66,15 @@ class Decoder(nn.Module):
         
         # embed captions using embedding layer
         embed = self.embed(cap)# shape: (batch_size, max_length, embed_dim)
+        
+        # apply positional encoding to caption embeddings
+        #embed = self.pos_encoder(embed)
 
         # concatenate image features with caption embeddings along the last dimension
         embed = torch.cat((y.unsqueeze(1).repeat(1, embed.shape[1], 1),embed), dim =2 )# shape: (batch_size, max_length, hidden_size*2 + embed_dim)
+        
+        #print(self.pos_encoding[:embed.size(1), :].shape)
+        embed += self.pos_encoding[:embed.size(1), :]
         
         # pass inputs through LSTM layer
         hiddens , _ = self.lstm(embed)# shape: (batch_size, max_length, hidden_size*2)
@@ -95,6 +86,22 @@ class Decoder(nn.Module):
         # pass outputs through linear layer to get logits for vocabulary
         outputs = self.linearDec(hiddens)# shape: (batch_size, max_length, vocab_size)
         return outputs
+    
+    def get_positional_encoding(self, max_seq_len, embed_dim):
+        # Initialize the positional encoding matrix with zeros
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        pos_enc = torch.zeros(max_seq_len, embed_dim).to(device)
+
+        # Calculate the positional encoding values
+        for pos in range(max_seq_len):
+            for i in range(0, embed_dim, 2):
+                # Calculate the sine and cosine values for the position and embedding dimension
+                div_term = torch.exp(torch.tensor(i, dtype=torch.float) * (-math.log(10000.0) / embed_dim))
+                pos_enc[pos, i] = torch.sin(torch.tensor(pos, dtype=torch.float) * div_term)
+                pos_enc[pos, i+1] = torch.cos(torch.tensor(pos, dtype=torch.float) * div_term)
+
+        # Return the positional encoding matrix
+        return pos_enc
 
 
 class Architecture3(nn.Module):
@@ -142,8 +149,13 @@ class Architecture3(nn.Module):
             for i in range(max_length):
                 y = self.decoder.embed(tok)
                 y = y.unsqueeze(1)
+                
+                # apply positional encoding to embeddings
+                #y = self.decoder.pos_encoder.get_encoding(y, i)
 
                 inp = torch.cat((img_features, y), dim=-1)
+                inp += self.decoder.pos_encoding[i, :]
+                
                 hiddens , states = self.decoder.lstm(inp, states)
                 hiddens = self.decoder.transformer_decoder(hiddens, inp)
                 output = self.decoder.linearDec(hiddens.squeeze(1))
